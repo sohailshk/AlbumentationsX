@@ -157,6 +157,21 @@ Implementation: [validation #620](https://github.com/albumentations-team/Albumen
 - Contract: [Macenko stain estimation](../maintaining/correctness-contracts.md#macenko-stain-estimation).
 - Tests: [Known-stain recovery test](../../tests/functional/test_functional.py).
 
+### RandomSizedBBoxSafeCrop resizes collection targets
+
+- Previous behavior: RandomSizedBBoxSafeCrop cropped but did not resize `images`, `volume`, `volumes`, `masks`,
+  `mask3d`, and `masks3d`. They kept the crop's size while `image` and `mask` were resized to `height` by `width`.
+- New behavior: These targets are resized to `height` by `width` with `interpolation` for images and volumes and
+  `mask_interpolation` for masks, so every target has the same spatial size as `image`. This corrects mismatched
+  output shapes.
+- Affected users: Pipelines that pass video frames, volumes, or stacked masks (including `instances` bound
+  through `masks`) through RandomSizedBBoxSafeCrop.
+- Migration: No API change is required. Remove any manual resize of these targets after the transform; for example,
+  `masks` now has shape `(N, height, width)`.
+- First affected version: unreleased
+- Contract: [Shared geometry across targets](../geometry.md#geometry-is-shared-across-targets).
+- Tests: [Collection target sizes](../../tests/test_crop.py).
+
 ### Custom sampled dispatch hooks
 
 - Previous behavior: An apply_with_params override could intercept framework dispatch and diverge from replay or

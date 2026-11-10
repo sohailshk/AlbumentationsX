@@ -16,6 +16,8 @@ from ._transforms_shared import (
     BaseTransformInitSchema,
     Field,
     FullInterpolationType,
+    StackedMasks4D,
+    VolumeType,
     check_range_bounds,
     denormalize_bboxes,
     fcrops,
@@ -414,6 +416,52 @@ class RandomSizedBBoxSafeCrop(BBoxSafeRandomCrop):
         scale_y = self.height / crop_height
         scale_x = self.width / crop_width
         return fgeometric.keypoints_scale(keypoints, scale_x=scale_x, scale_y=scale_y)
+
+    def _crop_and_resize_stack(
+        self,
+        stack: NDArray[np.uint8] | NDArray[np.float16] | NDArray[np.float32],
+        crop_coords: tuple[int, int, int, int],
+        interpolation: int,
+    ) -> NDArray[np.uint8] | NDArray[np.float16] | NDArray[np.float32]:
+        """Crop a leading-axis stack of (H, W, C) frames and resize every frame to (height, width)."""
+        crop = fcrops.volume_crop_yx(stack, *crop_coords)
+        result = np.empty((crop.shape[0], self.height, self.width, crop.shape[3]), dtype=crop.dtype)
+        for index, frame in enumerate(crop):
+            result[index] = fgeometric.resize(frame, (self.height, self.width), interpolation)
+        return result
+
+    def apply_to_images(
+        self,
+        images: NDArray[np.uint8] | NDArray[np.float16] | NDArray[np.float32],
+        crop_coords: tuple[int, int, int, int],
+        **params: Any,
+    ) -> NDArray[np.uint8] | NDArray[np.float16] | NDArray[np.float32]:
+        result = self._crop_and_resize_stack(images, crop_coords, self.interpolation)
+        return fgeometric.clip_if_interpolation_can_overshoot(result, self.interpolation)
+
+    def apply_to_volume(
+        self,
+        volume: VolumeType,
+        crop_coords: tuple[int, int, int, int],
+        **params: Any,
+    ) -> VolumeType:
+        return self.apply_to_images(volume, crop_coords, **params)
+
+    def apply_to_masks(
+        self,
+        masks: StackedMasks4D,
+        crop_coords: tuple[int, int, int, int],
+        **params: Any,
+    ) -> StackedMasks4D:
+        return StackedMasks4D(self._crop_and_resize_stack(masks, crop_coords, self.mask_interpolation))
+
+    def apply_to_mask3d(
+        self,
+        mask3d: VolumeType,
+        crop_coords: tuple[int, int, int, int],
+        **params: Any,
+    ) -> VolumeType:
+        return self._crop_and_resize_stack(mask3d, crop_coords, self.mask_interpolation)
 
 
 class BBoxSubsetSafeRandomCrop(BBoxSafeRandomCrop):
