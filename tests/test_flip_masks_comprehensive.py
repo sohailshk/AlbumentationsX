@@ -77,6 +77,28 @@ class TestFlipMasksCorrectness:
         expected = np.transpose(mask, (1, 0, 2))
         np.testing.assert_array_equal(result["mask"], expected)
 
+    @pytest.mark.parametrize("dtype", [np.int64, np.uint64])
+    @pytest.mark.parametrize("mask_shape", [(2, 3), (2, 3, 1)])
+    @pytest.mark.parametrize(
+        "transform,expected_func",
+        [
+            (A.Transpose(p=1.0), lambda mask: np.swapaxes(mask, 0, 1)),
+            (A.RandomRotate90(p=1.0), None),
+        ],
+    )
+    def test_transpose_and_rot90_preserve_64_bit_integer_mask(self, dtype, mask_shape, transform, expected_func):
+        mask = (np.arange(np.prod(mask_shape)).reshape(mask_shape) + 2**40).astype(dtype)
+
+        result = A.Compose([transform], seed=137)(image=np.zeros((2, 3, 3), dtype=np.uint8), mask=mask)["mask"]
+
+        assert result.dtype == mask.dtype
+        if expected_func is not None:
+            np.testing.assert_array_equal(result, expected_func(mask))
+        else:
+            assert any(
+                result.shape == np.rot90(mask, k).shape and np.array_equal(result, np.rot90(mask, k)) for k in range(4)
+            )
+
     def test_transpose_masks_batch_correctness(self):
         masks = np.array(
             [

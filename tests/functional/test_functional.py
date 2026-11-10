@@ -102,6 +102,32 @@ def test_rot90_volume_matches_numpy():
     np.testing.assert_array_equal(result, np.rot90(volume, 1))
 
 
+@pytest.mark.parametrize("dtype", [np.int64, np.uint64])
+@pytest.mark.parametrize("num_channels", [1, 3, 4])
+def test_transpose_preserves_64_bit_integer_values(dtype, num_channels):
+    large_offset = 2**40
+    array = (np.arange(2 * 3 * num_channels).reshape(2, 3, num_channels) + large_offset).astype(dtype)
+
+    result = fgeometric.transpose(array)
+
+    assert result.dtype == array.dtype
+    np.testing.assert_array_equal(result, array.transpose(1, 0, 2))
+
+
+@pytest.mark.parametrize("dtype", [np.int64, np.uint64])
+@pytest.mark.parametrize("num_channels", [1, 3, 4])
+@pytest.mark.parametrize("group_element", ["r90", "r180", "r270"])
+def test_rot90_preserves_64_bit_integer_values(dtype, num_channels, group_element):
+    large_offset = 2**40
+    array = (np.arange(2 * 3 * num_channels).reshape(2, 3, num_channels) + large_offset).astype(dtype)
+
+    result = fgeometric.rot90(array, group_element)
+
+    assert result.dtype == array.dtype
+    expected_rot90_count = {"r90": 1, "r180": 2, "r270": 3}[group_element]
+    np.testing.assert_array_equal(result, np.rot90(array, expected_rot90_count))
+
+
 @pytest.mark.parametrize("target", ["image", "mask"])
 def test_pad(target):
     img = np.array([[1, 2], [3, 4]], dtype=np.uint8)

@@ -39,6 +39,9 @@ C4_GROUP_ELEMENT_TO_K: dict[str, int] = {"e": 0, "r90": 1, "r180": 2, "r270": 3}
 
 _PadArray = Callable[..., np.ndarray]
 
+# OpenCV narrows 64-bit integer arrays to 32 bits, so these dtypes take the NumPy path.
+_CV2_UNSUPPORTED_DTYPES = frozenset({np.dtype(np.int64), np.dtype(np.uint64)})
+
 
 def resize(
     img: NDArray[np.uint8] | NDArray[np.float16] | NDArray[np.float32],
@@ -475,7 +478,11 @@ def transpose(
 
     """
     num_channels = img.shape[-1]
-    if img.ndim == NUM_MULTI_CHANNEL_DIMENSIONS and num_channels in {1, 3, 4}:
+    if (
+        img.ndim == NUM_MULTI_CHANNEL_DIMENSIONS
+        and num_channels in {1, 3, 4}
+        and img.dtype not in _CV2_UNSUPPORTED_DTYPES
+    ):
         result = cast(
             "NDArray[np.uint8] | NDArray[np.float16] | NDArray[np.float32]",
             cv2.transpose(img if num_channels != 1 else img[..., 0]),
@@ -555,7 +562,11 @@ def rot90(
         return img
 
     num_channels = img.shape[-1]
-    if img.ndim == NUM_MULTI_CHANNEL_DIMENSIONS and num_channels in {1, 3, 4}:
+    if (
+        img.ndim == NUM_MULTI_CHANNEL_DIMENSIONS
+        and num_channels in {1, 3, 4}
+        and img.dtype not in _CV2_UNSUPPORTED_DTYPES
+    ):
         if rot90_count == 1:
             rotate_code = cv2.ROTATE_90_COUNTERCLOCKWISE
         elif rot90_count == 2:

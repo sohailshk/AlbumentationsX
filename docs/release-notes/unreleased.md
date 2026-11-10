@@ -157,6 +157,23 @@ Implementation: [validation #620](https://github.com/albumentations-team/Albumen
 - Contract: [Macenko stain estimation](../maintaining/correctness-contracts.md#macenko-stain-estimation).
 - Tests: [Known-stain recovery test](../../tests/functional/test_functional.py).
 
+### Transpose and quarter turns keep 64-bit integer masks
+
+- Previous behavior: Transpose, RandomRotate90, and the D4 elements that use them returned `int32` for `int64` or
+  `uint64` masks with 1, 3, or 4 channels (or no channel axis), because OpenCV narrows 64-bit integers. Values above
+  `2**31 - 1` were wrapped.
+- New behavior: These transforms return the input dtype and exact values for 64-bit integer masks, matching flips and
+  crops. This corrects an output dtype and value error.
+- Affected users: Pipelines that pass `int64` or `uint64` instance or label masks through Transpose, RandomRotate90, or
+  D4.
+- Migration: No API change is required. Remove any `astype(np.int64)` workaround after these transforms and
+  regenerate cached masks, for example `A.Compose([A.Transpose(p=1.0)])(image=image, mask=mask)["mask"].dtype` is now
+  `int64` for an `int64` mask.
+- First affected version: unreleased
+- Contract: [Interpolation, borders, and fill](../geometry.md#interpolation-borders-and-fill).
+- Tests: [Quarter-turn and transpose dtype tests](../../tests/functional/test_functional.py), [mask
+  transforms](../../tests/test_flip_masks_comprehensive.py).
+
 ### Custom sampled dispatch hooks
 
 - Previous behavior: An apply_with_params override could intercept framework dispatch and diverge from replay or
