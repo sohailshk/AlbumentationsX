@@ -157,6 +157,21 @@ Implementation: [validation #620](https://github.com/albumentations-team/Albumen
 - Contract: [Macenko stain estimation](../maintaining/correctness-contracts.md#macenko-stain-estimation).
 - Tests: [Known-stain recovery test](../../tests/functional/test_functional.py).
 
+### Random sized crops resize label volumes with mask interpolation
+
+- Previous behavior: RandomResizedCrop and RandomSizedCrop resized `mask3d` and `masks3d` with the image
+  interpolation policy (`interpolation`, bilinear by default) instead of `mask_interpolation`, so label volumes gained
+  values that were not in the input. Boolean `mask3d` raised a cv2 error.
+- New behavior: `mask3d` and `masks3d` are resized with `mask_interpolation` (nearest by default), like `mask` and
+  `masks`. This corrects an interpolation error; boolean label volumes now resize like boolean masks.
+- Affected users: Pipelines that pass 3D label volumes or collections of them through RandomResizedCrop or
+  RandomSizedCrop.
+- Migration: No API change is required; regenerate cached label volumes. To keep the previous smooth resampling, pass
+  it explicitly, for example `A.RandomResizedCrop(size=(256, 256), mask_interpolation=cv2.INTER_LINEAR)`.
+- First affected version: unreleased
+- Contract: [Interpolation, borders, and fill](../geometry.md#interpolation-borders-and-fill).
+- Tests: [Label volume resizing](../../tests/test_random_resized_crop.py).
+
 ### Custom sampled dispatch hooks
 
 - Previous behavior: An apply_with_params override could intercept framework dispatch and diverge from replay or

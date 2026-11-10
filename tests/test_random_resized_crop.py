@@ -672,3 +672,26 @@ def test_random_resized_crop_applied_config_replaces_policy_with_realized_shape(
     assert applied_config["scale"][0] == applied_config["scale"][1]
     assert applied_config["ratio"][0] == applied_config["ratio"][1]
     assert math.isfinite(applied_config["scale"][0])
+
+
+@pytest.mark.parametrize(
+    "transform",
+    [
+        pytest.param(A.RandomResizedCrop(size=(96, 120), scale=(0.3, 0.5), p=1.0), id="random-resized-crop"),
+        pytest.param(A.RandomSizedCrop(min_max_height=(20, 30), size=(96, 120), p=1.0), id="random-sized-crop"),
+    ],
+)
+def test_mask3d_and_masks3d_resize_like_mask(transform: A.DualTransform) -> None:
+    """Label volumes use mask_interpolation, so resizing creates no new label values."""
+    mask = (((np.indices((48, 64)) // 4).sum(axis=0) % 2) * 10).astype(np.uint8)
+    mask[24:] += 100
+
+    def run(**targets: Any) -> dict[str, Any]:
+        return A.Compose([transform], seed=137)(image=np.zeros((48, 64, 3), dtype=np.uint8), **targets)
+
+    expected = run(mask=mask)["mask"]
+    result = run(mask3d=np.stack([mask, mask[::-1]]), masks3d=np.stack([np.stack([mask, mask[::-1]])] * 2))
+
+    assert set(np.unique(result["mask3d"])) <= set(np.unique(mask))
+    np.testing.assert_array_equal(result["mask3d"][0], expected)
+    np.testing.assert_array_equal(result["masks3d"][1, 0], expected)

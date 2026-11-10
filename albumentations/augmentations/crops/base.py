@@ -857,7 +857,13 @@ class _BaseRandomSizedCrop(DualTransform):
         crop_coords: tuple[int, int, int, int],
         **params: Any,
     ) -> VolumeType:
-        return self.apply_to_images(mask3d, crop_coords, **params)
+        # Resize labels with the mask interpolation, not the image interpolation, so categories are not blended.
+        crop = fcrops.volume_crop_yx(mask3d, *crop_coords)
+        interpolation = self._get_interpolation_for_resize(cast("tuple[int, int]", crop.shape[1:3]), "mask")
+        result = np.empty((mask3d.shape[0], self.size[0], self.size[1], crop.shape[-1]), dtype=crop.dtype)
+        for i in range(mask3d.shape[0]):
+            result[i] = fgeometric.resize(crop[i], self.size, interpolation)
+        return cast("VolumeType", result)
 
 
 __all__ = [
