@@ -613,3 +613,46 @@ def test_bbox_subset_safe_random_crop_returns_full_image_when_aspect_ratio_is_in
     result = transform.sample_parameters(*make_sampling_args(transform, data), sampling).params
 
     assert result == {"crop_coords": (0, 0, 200, 100), "bbox_indices": (0,)}
+
+
+def test_random_sized_bbox_safe_crop_resizes_collection_targets():
+    """images, volume(s), masks and mask3d(s) must be resized to the output size like image and mask."""
+    rng = np.random.default_rng(137)
+    height, width = 48, 80
+    image = rng.integers(0, 256, (height, width, 3), dtype=np.uint8)
+    mask = rng.integers(0, 4, (height, width), dtype=np.uint8)
+    bboxes = np.array([[10, 8, 40, 30], [30, 12, 60, 40]], dtype=np.float32)
+    size = (24, 36)
+
+    def run(**targets):
+        transform = A.Compose(
+            [A.RandomSizedBBoxSafeCrop(*size, p=1.0)],
+            bbox_params=A.BboxParams(coord_format="pascal_voc", label_fields=["labels"]),
+            seed=137,
+        )
+        return transform(bboxes=bboxes, labels=[1, 2], **targets)
+
+    expected = run(image=image, mask=mask)
+    assert expected["image"].shape[:2] == size
+
+    result = run(
+        image=image,
+        mask=mask,
+        images=np.stack([image, image[::-1]]),
+        volume=np.stack([image, image[::-1]]),
+        volumes=np.stack([np.stack([image, image[::-1]])] * 2),
+        masks=np.stack([mask, mask[::-1]]),
+        mask3d=np.stack([mask, mask[::-1]]),
+        masks3d=np.stack([np.stack([mask, mask[::-1]])] * 2),
+    )
+
+    flipped = run(image=image[::-1], mask=mask[::-1])
+    images = np.stack([expected["image"], flipped["image"]])
+    masks = np.stack([expected["mask"], flipped["mask"]])
+    np.testing.assert_array_equal(result["image"], expected["image"])
+    np.testing.assert_array_equal(result["images"], images)
+    np.testing.assert_array_equal(result["volume"], images)
+    np.testing.assert_array_equal(result["volumes"], np.stack([images] * 2))
+    np.testing.assert_array_equal(result["masks"], masks)
+    np.testing.assert_array_equal(result["mask3d"], masks)
+    np.testing.assert_array_equal(result["masks3d"], np.stack([masks] * 2))
